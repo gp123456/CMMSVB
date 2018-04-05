@@ -1,0 +1,398 @@
+Dim machineLines As Integer
+Dim mapMachineId As Scripting.Dictionary
+Dim mapDeclarations As Scripting.Dictionary
+Dim currentLine As Integer
+Dim currentCreated As Date
+Dim runDate As Date
+Dim currentDuration As Long
+Dim CountSingleItem As Integer
+Dim CountMultipleItem As Integer
+Dim DBConnectionString As String
+Dim LOCNKEY As Long
+Dim LOCN As String
+Dim STEP As String
+Dim MCU As String
+Dim FAAL1 As String
+Dim LINE As String
+Dim UKIDP As Long
+Dim initialized As Integer ' if machine is stopped on startup, this is used to not run SetStopMachine immediately upon startup, but after InitializeMachine routine has finished
+
+
+Sub MultiCause()
+    Dim mc As New MultiCause
+    
+    mc.Show
+End Sub
+
+Sub MechanicalCause()
+    Dim mc As New MechanicalCause
+    
+    mc.Show
+End Sub
+
+Sub ElectricalCause()
+    Dim ec As New ElectricalCause
+    
+    ec.Show
+End Sub
+
+Sub DelayCause()
+    Dim dc As New DelayCause
+    
+    dc.Show
+End Sub
+
+Sub SetStopMachine()
+    If initialized = 1 Then ' verify that InitializeMachine finished
+      
+        Dim triggerOffLine As Tag
+        Set cmmsConnection = New ADODB.Connection
+     
+        cmmsConnection.ConnectionString = DBConnectionString
+        cmmsConnection.Open
+        For index = 1 To machineLines
+        
+            Set triggerOffLine = gTagDb.GetTag("CMMS\TriggerOffLine" & CStr(index))
+         
+            Dim status As Integer
+            Set rs = cmmsConnection.Execute _
+                ("Select Top 1 * From dbo.run_stop Where dbo.run_stop.machine=" & CStr(mapMachineId.item(index)) & _
+                " Order By dbo.run_stop.created Desc")
+            Do While Not rs.EOF
+                status = rs.Fields(1).value
+                rs.MoveNext
+            Loop
+            rs.Close
+            If triggerOffLine.value And mapMachineId.Exists(index) And status = 2 Then
+            
+                Dim department As Tag
+                Dim current As Date
+                Set department = gTagDb.GetTag("CMMS\Department")
+                
+                current = Now
+                Set rs = cmmsConnection.Execute _
+                    ("Select * From dbo.vLocations Where dbo.vLocations.Q3KEY=" & CStr(department.value))
+                Do While Not rs.EOF
+                    current = DateAdd("n", -1 * rs.Fields(7).value, Now)
+                    rs.MoveNext
+                Loop
+                rs.Close
+                
+                cmmsConnection.Execute _
+                    ("Insert INTO dbo.run_stop (status,machine,created) VALUES (1," & _
+                    CStr(mapMachineId.item(index)) & ",'" & CStr(current) & "')")
+                    
+         ' **************************** LOG
+       cmmsConnection.Execute _
+        ("Insert INTO dbo.log (machine,created,routine,logtext) VALUES (" & mapMachineId.item(index) & _
+        ",'" & CStr(Now) & "','stop','finished') ")
+        
+                    
+            End If
+            
+        Next
+        
+        cmmsConnection.Close
+    End If
+End Sub
+
+Sub SetRunMachine()
+    If initialized = 1 Then ' verify that InitializeMachine finished
+        Dim triggerOnLine As Tag
+        Dim declarationStopMachine As Tag
+        Set declarationStopMachine = gTagDb.GetTag("CMMS\DeclarationStopMachine")
+        Set cmmsConnection = New ADODB.Connection
+        
+        cmmsConnection.ConnectionString = DBConnectionString
+        cmmsConnection.Open
+        
+        For index = 1 To machineLines
+            Set triggerOnLine = gTagDb.GetTag("CMMS\TriggerOnLine" & CStr(index))
+            If triggerOnLine.value And mapMachineId.Exists(index) And mapDeclarations.Exists(index) = False Then
+                Dim status As Integer
+                
+                Set rs = cmmsConnection.Execute _
+                    ("Select Top 1 * From dbo.run_stop Where dbo.run_stop.machine=" & CStr(mapMachineId.item(index)) & _
+                    " Order By dbo.run_stop.created Desc")
+                Do While Not rs.EOF
+                    status = rs.Fields(1).value
+                    rs.MoveNext
+                Loop
+                rs.Close
+                If status = 1 Then
+                    Dim department As Tag
+                    
+                    runDate = Now
+                    Set department = gTagDb.GetTag("CMMS\Department")
+                    
+                    Set rs = cmmsConnection.Execute _
+                        ("Select * From dbo.vLocations Where dbo.vLocations.Q3KEY=" & CStr(department.value))
+                    Do While Not rs.EOF
+                        runDate = DateAdd("n", -1 * rs.Fields(8).value, Now)
+                        rs.MoveNext
+                    Loop
+                    rs.Close
+                    cmmsConnection.Execute _
+                        ("Insert INTO dbo.run_stop (status,machine,created) VALUES (2," & _
+                        CStr(mapMachineId.item(index)) & ",'" & CStr(runDate) & "')")
+                    
+         ' **************************** LOG
+       cmmsConnection.Execute _
+        ("Insert INTO dbo.log (machine,created,routine,logtext) VALUES (" & mapMachineId.item(index) & _
+        ",'" & CStr(Now) & "','run','finished') ")
+                    
+                    
+                    mapDeclarations.Add index, index
+                    If declarationStopMachine.value = 0 Then
+                        currentLine = index
+                        declarationStopMachine.value = 1
+                    End If
+                End If
+            End If
+        Next
+        
+        
+        cmmsConnection.Close
+    End If
+End Sub
+
+Sub InitializeCause()
+    Dim screenTitle As Tag
+    Dim cmmsConnection As ADODB.Connection
+    Set screenTitle = gTagDb.GetTag("CMMS\ScreenTitle")
+    Set cmmsConnection = New ADODB.Connection
+    Dim status As Integer
+    
+    cmmsConnection.ConnectionString = DBConnectionString
+    cmmsConnection.Open
+    
+            
+        ' **************************** LOG
+       cmmsConnection.Execute _
+        ("Insert INTO dbo.log (machine,created,routine,logtext) VALUES (" & mapMachineId.item(currentLine) & _
+        ",'" & CStr(Now) & "','InitializeCause','started') ")
+        
+        
+    Set rs = cmmsConnection.Execute _
+        ("Select Top 1 * From dbo.run_stop Where dbo.run_stop.machine=" & CStr(mapMachineId.item(currentLine)) & _
+        " And dbo.run_stop.status = 1 Order By dbo.run_stop.created Desc")
+        
+    Do While Not rs.EOF
+        currentCreated = rs.Fields(3).value
+        rs.MoveNext
+        
+    Loop
+    rs.Close
+    
+    currentDuration = DateDiff("s", currentCreated, runDate)
+    Set rs = cmmsConnection.Execute _
+        ("Select * From dbo.vMachine Where dbo.vMachine.IW$IDFAC='" & CStr(mapMachineId.item(currentLine)) & "'")
+        
+           
+    Do While Not rs.EOF
+        FAAL1 = rs.Fields(1).value
+        LINE = rs.Fields(2).value
+        screenTitle.value = rs.Fields(9).value
+        LOCNKEY = rs.Fields(8).value
+        LOCN = rs.Fields(4).value
+        STEP = rs.Fields(5).value
+        MCU = rs.Fields(7).value
+        
+        If rs.Fields(6).value Then
+        UKIDP = rs.Fields(6).value
+        End If
+         
+        ' **************************** LOG
+       cmmsConnection.Execute _
+        ("Insert INTO dbo.log (machine,created,routine,logtext) VALUES (" & mapMachineId.item(currentLine) & _
+        ",'" & CStr(Now) & "','InitializeCause','finished') ")
+        
+        rs.MoveNext
+    Loop
+    rs.Close
+    cmmsConnection.Close
+End Sub
+
+Sub InitializeMachine()
+
+    Dim machineFaal1 As Tag
+    Dim department As Tag
+    Dim timerPresetOnLine As Tag
+    Dim timerPresetOffLine As Tag
+    'Dim projectStop As Tag
+    'Dim tagsMachineOffLines As Tags
+    'Dim tagsMachineOnLines As Tags
+    Dim countLines As Integer
+    DBConnectionString = "driver={SQL Server};server=172.17.32.201\KOSMOS,1435;uid=cmms;pwd=@bicviolex@;database=cmms"
+    CountSingleItem = 14
+    CountMultipleItem = 9
+    'Set projectStop = gTagDb.GetTag("CMMS\ProjectStop")
+    'Set tagsMachineOffLines = gTagDb.QueryForTags("CMMS\TriggerOffLine*")
+    'Set tagsMachineOnLines = gTagDb.QueryForTags("CMMS\TriggerOnLine*")
+    'Set startProgram = gTagDb.GetTag("CMMS\StartProgram")
+    'If projectStop.value = 1 Then
+     '   projectStop.value = 0
+    'End If
+    
+    'If tagsMachineOffLines.count <> tagsMachineOnLines.count Then
+    '    MsgBox "Aeaoinaoeeuo i aneeiuo oui TriggerOnLine[" & CStr(tagsMachineOnLines.count) & _
+    '        "] a?u oui TriggerOffLine[" & CStr(tagsMachineOffLines.count) & "]"
+    '    projectStop.value = 1
+    '    Application.Exit
+    'Else
+    '    machineLines = tagsMachineOnLines.count
+    'End If
+    
+    Set mapMachineId = CreateObject("Scripting.Dictionary")
+    Set mapDeclarations = CreateObject("Scripting.Dictionary")
+    Set machineFaal1 = gTagDb.GetTag("CMMS\FAAL1")
+    Set department = gTagDb.GetTag("CMMS\Department")
+    Set cmmsConnection = New ADODB.Connection
+    cmmsConnection.ConnectionString = DBConnectionString
+    cmmsConnection.Open
+    'Set rs = cmmsConnection.Execute _
+     '   ("Select count(*) From dbo.vMachine Where dbo.vMachine.IW$FAAL1='" & CStr(machineFaal1.value) & "'" & _
+      '  " And dbo.vMachine.IWLOCNKEY=" & CStr(department.value))
+    'Do While Not rs.EOF
+     '   If machineLines > rs.Fields(0).value Then
+      '      MsgBox "Ie ic?aiYo ooci aUoc a?iae eeauoanao a?u oii aneeiu oui TriggerOnLine, TriggerOffLine"
+       '     projectStop.value = 1
+        '    Application.Exit
+        'ElseIf machineLines < rs.Fields(0).value Then
+         '   If MsgBox("I aneeiuo oui ic?ai?i ooci aUoc a?iae ieenuoanio oio aneeiiy oui TriggerOnLine," & _
+          '      "TriggerOffLine" & vbCrLf & "EYeaeo ia ooia??oaeo ? u?e;", vbYesNo) = MsgBoxResult.No Then
+           '     projectStop.value = 1
+            '    Application.Exit
+            'End If
+        'End If
+       'rs.MoveNext
+    'Loop
+    'rs.Close
+    
+        
+    Set rs = cmmsConnection.Execute _
+        ("Select * From dbo.vMachine Where dbo.vMachine.IW$FAAL1='" & machineFaal1.value & "'" & _
+        " And dbo.vMachine.IWLOCNKEY=" & CStr(department.value))
+    Do While Not rs.EOF
+        countLines = countLines + 1
+        'machineLines = machineLines + 1
+        mapMachineId.Add countLines, rs.Fields(0).value
+
+        ' **************************** LOG
+       cmmsConnection.Execute _
+        ("Insert INTO dbo.log (machine,created,routine,logtext) VALUES (" & mapMachineId.item(countLines) & _
+        ",'" & CStr(Now) & "','InitializeMachine','started') ")
+        
+        rs.MoveNext
+    Loop
+    machineLines = countLines
+    rs.Close
+    Set rs = cmmsConnection.Execute _
+        ("Select * From dbo.vLocations Where dbo.vLocations.Q3KEY=" & CStr(department.value))
+       
+       
+    Do While Not rs.EOF
+        For index = 1 To machineLines
+           
+            Set timerPresetOnLine = gTagDb.GetTag("CMMS\TimerPresetOnLine" & CStr(index))
+            Set timerPresetOffLine = gTagDb.GetTag("CMMS\TimerPresetOffLine" & CStr(index))
+            timerPresetOnLine.value = rs.Fields(8).value
+            timerPresetOffLine.value = rs.Fields(7).value
+        ' **************************** LOG
+       cmmsConnection.Execute _
+        ("Insert INTO dbo.log (machine,created,routine,logtext) VALUES (" & mapMachineId.item(index) & _
+        ",'" & CStr(Now) & "','InitializeMachine','Set start-stop times') ")
+    
+        ' **************************** removed index=index+1
+        Next
+        rs.MoveNext
+    Loop
+    
+    rs.Close
+    cmmsConnection.Close
+    initialized = 1 ' now we can run SetStopMachine routine
+        
+    Call SetStopMachine ' call it every time in case machine is stopped and the scada event SetStopMachine ran before initialize finishes
+    Call SetRunMachine ' call it every time in case machine is stopped and the scada event SetStopMachine ran before initialize finishes
+   
+End Sub
+
+Function hasMapDeclarations()
+    hasMapDeclarations = (mapDeclarations.count > 0)
+End Function
+
+Function removeMapDeclarations()
+    mapDeclarations.Remove (currentLine)
+End Function
+
+Function getCurrentLine()
+    getCurrentLine = currentLine
+End Function
+
+Function setCurrentLine()
+    For index = 1 To machineLines
+        If mapDeclarations.Exists(index) Then
+            currentLine = index
+            Exit For
+        End If
+    Next
+End Function
+
+Function getCurrentDuration()
+    getCurrentDuration = currentDuration
+End Function
+
+Function getCurrentCreated()
+    getCurrentCreated = currentCreated
+End Function
+
+Function getCurrentMachineId()
+    getCurrentMachineId = mapMachineId.item(currentLine)
+End Function
+
+Function wait(MilliSeconds As Long)
+    Dim lngTickStore As Long
+    lngTickStore = GetTickCount()
+    Do While lngTickStore + MilliSeconds > GetTickCount()
+    DoEvents
+    Loop
+End Function
+
+Function getCountSingleItem()
+    getCountSingleItem = CountSingleItem
+End Function
+
+Function getCountMultipleItem()
+    getCountMultipleItem = CountMultipleItem
+End Function
+
+Function getDBConnectionString()
+    getDBConnectionString = DBConnectionString
+End Function
+
+Function getFAAL1()
+    getFAAL1 = FAAL1
+End Function
+
+Function getLINE()
+    getLINE = LINE
+End Function
+
+Function getLOCNKEY()
+    getLOCNKEY = LOCNKEY
+End Function
+Function getLOCN()
+    getLOCN = LOCN
+End Function
+
+Function getSTEP()
+    getSTEP = STEP
+End Function
+
+Function getUKIDP()
+    getUKIDP = UKIDP
+End Function
+
+Function getMCU()
+    getMCU = MCU
+End Function

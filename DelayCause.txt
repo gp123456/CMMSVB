@@ -1,0 +1,150 @@
+﻿Dim cmmsConnection As ADODB.Connection
+Dim causeId As Scripting.Dictionary
+Dim duration As Long
+Dim firstIndex As Integer
+Dim lastIndex As Integer
+Dim sbPrevValue As Integer
+Dim sbUp As Boolean
+
+Private Sub btCancel_Click()
+    DoCmd.Close
+    cmmsConnection.Close
+End Sub
+
+Private Sub btSubmit_Click()
+    If lstCause.ListCount > 0 And lstCause.Text = "" Then
+        lblSubmit = "ÐñÝðåé íá åðéëÝîåéò ìéá êáèõóôÝñçóç áðü ôçí ëßóôá"
+    Else
+        Dim machineId As Long
+        Dim returnMain As Tag
+        Dim department As Long
+        Dim cause As Long
+    
+        ThisProject.removeMapDeclarations
+        machineId = ThisProject.getCurrentMachineId()
+        Set returnMain = gTagDb.GetTag("CMMS\ReturnMain")
+        cause = causeId.item(lstCause.ListIndex)
+        cmmsConnection.Execute _
+            ("Insert INTO dbo.F57790 VALUES ('" & CStr(ThisProject.getCurrentCreated()) & ".00','0'," & _
+            CStr(ThisProject.getLOCNKEY()) & ",'" & ThisProject.getLOCN() & "','" & ThisProject.getSTEP() & "','" & _
+            ThisProject.getMCU() & "',3," & CStr(cause) & "," & CStr(machineId) & ",'" & ThisProject.getFAAL1() & _
+            "','" & ThisProject.getLINE() & "','0','" & CStr(cause) & "'," & CStr(duration) & "," & _
+            CStr(ThisProject.getUKIDP()) & ",0,'" & CStr(Now) & ".00','DLAD','0','',0)")
+            
+            
+        ' **************************** LOG
+       cmmsConnection.Execute _
+        ("Insert INTO dbo.log (machine,created,routine,logtext) VALUES (" & machineId & _
+        ",'" & CStr(Now) & "','btSubmit_Click - Delay Cause','finished') ")
+        
+            
+            
+        cmmsConnection.Close
+        If ThisProject.hasMapDeclarations() = False Then
+            returnMain.value = 1
+        Else
+            ThisProject.setCurrentLine
+            Call ThisProject.InitializeCause
+        End If
+        DoCmd.Close
+    End If
+End Sub
+
+Private Sub sbLoadCause_Change()
+    If sbPrevValue < sbLoadCause.value Then
+        sbUp = True
+        getCausesPerPage (" And dbo.vDelays.DRKEY>" & CStr(lastIndex))
+    Else
+        sbUp = False
+        getCausesPerPage (" And dbo.vDelays.DRKEY<" & CStr(firstIndex))
+    End If
+    sbPrevValue = sbLoadCause.value
+End Sub
+
+Private Sub UserForm_Initialize()
+    Dim index As Integer
+    Dim count As Long
+    
+    duration = ThisProject.getCurrentDuration()
+    lblSubmit = "ÄéÜñêåéá óôáìáôÞìáôïò ôçò ìç÷áíÞò (ëåðôÜ):" & CStr(Int(duration / 60))
+    Set causeId = CreateObject("Scripting.Dictionary")
+    Set cmmsConnection = New ADODB.Connection
+    cmmsConnection.ConnectionString = ThisProject.getDBConnectionString()
+    cmmsConnection.Open
+    
+    Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.vDelays Where dbo.vDelays.DRLOCNKEY=" & _
+        CStr(ThisProject.getLOCNKEY()) & " Order By dbo.vDelays.DRKEY")
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstIndex = rs.Fields(0).value
+        Else
+            lastIndex = rs.Fields(0).value
+        End If
+        lstCause.AddItem (rs.Fields(2).value)
+        causeId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+    Set rs = cmmsConnection.Execute _
+        ("Select count(*) From dbo.vDelays Where dbo.vDelays.DRLOCNKEY=" & CStr(ThisProject.getLOCNKEY()))
+    Do While Not rs.EOF
+        count = rs.Fields(0).value
+        rs.MoveNext
+    Loop
+    rs.Close
+    If count Mod ThisProject.getCountSingleItem() = 0 Then
+        sbLoadCause.Max = Int(count / ThisProject.getCountSingleItem())
+    Else
+        sbLoadCause.Max = Int(count / ThisProject.getCountSingleItem()) + 1
+    End If
+    sbPrevValue = 1
+    
+    
+    lblStopMachine.Caption = lblStopMachine.Caption & Format(ThisProject.getCurrentCreated(), "dd/mm/yyyy hh:nn")
+    
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode = 0 Then Cancel = True
+End Sub
+
+Function getCausesPerPage(direction As String)
+    Dim index As Integer
+    Dim query As String
+
+    If sbUp = True Then
+        query = "Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.vDelays Where " & _
+        "dbo.vDelays.DRLOCNKEY=" & CStr(ThisProject.getLOCNKEY()) & direction & " Order By dbo.vDelays.DRKEY"
+    Else
+        Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.vDelays Where dbo.vDelays.DRLOCNKEY=" & _
+        CStr(ThisProject.getLOCNKEY()) & direction & " Order By dbo.vDelays.DRKEY Desc")
+        Do While Not rs.EOF
+            index = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        query = "Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.vDelays Where " & _
+        "dbo.vDelays.DRLOCNKEY=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.vDelays.DRKEY>=" & CStr(index) & _
+        " Order By dbo.vDelays.DRKEY"
+    End If
+    
+    lstCause.Clear
+    causeId.RemoveAll
+    index = 0
+    Set rs = cmmsConnection.Execute(query)
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstIndex = rs.Fields(0).value
+        Else
+            lastIndex = rs.Fields(0).value
+        End If
+        lstCause.AddItem (rs.Fields(2).value)
+        causeId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+End Function

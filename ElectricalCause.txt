@@ -1,0 +1,253 @@
+﻿Dim cmmsConnection As ADODB.Connection
+Dim causeId As Scripting.Dictionary
+Dim duration As Long
+Dim firstIndex As Integer
+Dim lastIndex As Integer
+Dim sbPrevValue As Integer
+Dim sbUp As Boolean
+Dim lstCauseId As Long
+
+Private Sub btCancel_Click()
+    DoCmd.Close
+    cmmsConnection.Close
+End Sub
+
+Private Sub btSubCause_Click()
+    If lstCause.ListCount > 0 And lstCause.Text = "" Then
+        lblSubmit = "ÐñÝðåé íá åðéëÝîåéò ìéá âëÜâç áðü ôçí ëßóôá"
+    Else
+        Dim index As Integer
+        Dim count As Long
+        
+        btSubmit.Enabled = True
+        btSubCause.Enabled = False
+        
+        lblSubmit = ""
+        lstCauseId = causeId.item(lstCause.ListIndex)
+        lblCause = lblCause + " - " + lstCause.Text
+        lstCause.Clear
+        causeId.RemoveAll
+        Set rs = cmmsConnection.Execute _
+            ("Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.subcause Where dbo.subcause.cause=" & _
+            lstCauseId & " And dbo.subcause.enable=1 Order By dbo.subcause.id")
+        Do While Not rs.EOF
+            If index = 0 Then
+                firstIndex = rs.Fields(0).value
+            Else
+                lastIndex = rs.Fields(0).value
+            End If
+            lstCause.AddItem (rs.Fields(4).value)
+            causeId.Add index, rs.Fields(0).value
+            index = index + 1
+            rs.MoveNext
+        Loop
+        rs.Close
+        Set rs = cmmsConnection.Execute _
+            ("Select count(*) From dbo.subcause Where dbo.subcause.cause=" & lstCauseId & " And dbo.subcause.enable=1")
+        Do While Not rs.EOF
+            count = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        If count Mod ThisProject.getCountSingleItem() = 0 Then
+            sbLoadCause.Max = Int(count / ThisProject.getCountSingleItem())
+        Else
+            sbLoadCause.Max = Int(count / ThisProject.getCountSingleItem()) + 1
+        End If
+        sbPrevValue = 1
+    End If
+End Sub
+
+Private Sub btSubmit_Click()
+    If lstCause.ListCount > 0 And lstCause.Text = "" Then
+        lblSubmit = "ÐñÝðåé íá åðéëÝîåéò ìéá âëÜâç áðü ôçí ëßóôá"
+    Else
+        Dim machineId As String
+        Dim returnMain As Tag
+        Dim department As Long
+        Dim subcause As Long
+        Dim damageId As Long
+                
+        machineId = ThisProject.getCurrentMachineId()
+        Set returnMain = gTagDb.GetTag("CMMS\ReturnMain")
+        subcause = causeId.item(lstCause.ListIndex)
+        Set rs = cmmsConnection.Execute _
+            ("Select Top 1 * From dbo.F57790 Order By dbo.F57790.Q32UKID Desc")
+        Do While Not rs.EOF
+            damageId = rs.Fields(0) + 1
+            rs.MoveNext
+        Loop
+        rs.Close
+        cmmsConnection.Execute _
+            ("Insert INTO dbo.F57790 VALUES ('" & CStr(ThisProject.getCurrentCreated()) & ".00','0'," & _
+            CStr(ThisProject.getLOCNKEY()) & ",'" & ThisProject.getLOCN() & "','" & ThisProject.getSTEP() & "','" & _
+            ThisProject.getMCU() & "',2," & CStr(subcause) & "," & CStr(machineId) & ",'" & ThisProject.getFAAL1() & "','" & _
+            ThisProject.getLINE() & "','0','" & CStr(subcause) & "'," & CStr(duration) & "," & _
+            CStr(ThisProject.getUKIDP()) & ",0,'" & CStr(Now) & ".00','DLAD','0','',0)")
+            
+              
+        ' **************************** LOG
+       cmmsConnection.Execute _
+        ("Insert INTO dbo.log (machine,created,routine,logtext) VALUES (" & machineId & _
+        ",'" & CStr(Now) & "','btSubmit_Click - Electrical Cause','finished') ")
+        
+            
+        cmmsConnection.Close
+        
+        ThisProject.removeMapDeclarations
+        If ThisProject.hasMapDeclarations() = False Then
+            returnMain.value = 1
+        Else
+            ThisProject.setCurrentLine
+            Call ThisProject.InitializeCause
+        End If
+        DoCmd.Close
+    End If
+End Sub
+
+Private Sub sbLoadCause_Change()
+    If sbPrevValue < sbLoadCause.value Then
+        sbUp = True
+        If (btSubmit.Enabled = False) Then
+            getCausesPerPage (" And dbo.cause.id>" & CStr(lastIndex))
+        Else
+            getSubCausesPerPage (" And dbo.subcause.id>" & CStr(lastIndex))
+        End If
+    Else
+        sbUp = False
+        If (btSubmit.Enabled = False) Then
+            getCausesPerPage (" And dbo.cause.id<" & CStr(firstIndex))
+        Else
+            getSubCausesPerPage (" And dbo.subcause.id<" & CStr(firstIndex))
+        End If
+    End If
+    sbPrevValue = sbLoadCause.value
+End Sub
+
+Private Sub UserForm_Initialize()
+    Dim index As Integer
+    Dim count As Long
+    
+    duration = ThisProject.getCurrentDuration()
+    lblSubmit = "ÄéÜñêåéá óôáìáôÞìáôïò ôçò ìç÷áíÞò (ëåðôÜ):" & CStr(Int(duration / 60))
+    Set causeId = CreateObject("Scripting.Dictionary")
+    Set cmmsConnection = New ADODB.Connection
+    cmmsConnection.ConnectionString = ThisProject.getDBConnectionString()
+    cmmsConnection.Open
+    Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.cause Where dbo.cause.type=2 And " & _
+        "dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1 Order By dbo.cause.id")
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstIndex = rs.Fields(0).value
+        Else
+            lastIndex = rs.Fields(0).value
+        End If
+        lstCause.AddItem (rs.Fields(5).value)
+        causeId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+    Set rs = cmmsConnection.Execute _
+        ("Select count(*) From dbo.cause Where dbo.cause.type=2 And dbo.cause.department=" & _
+        CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1")
+    Do While Not rs.EOF
+        count = rs.Fields(0).value
+        rs.MoveNext
+    Loop
+    rs.Close
+    If count Mod ThisProject.getCountSingleItem() = 0 Then
+        sbLoadCause.Max = Int(count / ThisProject.getCountSingleItem())
+    Else
+        sbLoadCause.Max = Int(count / ThisProject.getCountSingleItem()) + 1
+    End If
+    sbPrevValue = 1
+    btSubmit.Enabled = False
+    lblStopMachine.Caption = lblStopMachine.Caption & Format(ThisProject.getCurrentCreated(), "dd/mm/yyyy hh:nn")
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode = 0 Then Cancel = True
+End Sub
+
+Function getCausesPerPage(direction As String)
+    Dim index As Integer
+    Dim query As String
+    
+    If sbUp = True Then
+        query = "Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.cause Where dbo.cause.type=2 " & _
+        "And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1" & direction & _
+        " Order By dbo.cause.id"
+    Else
+        Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.cause Where dbo.cause.type=2 " & _
+        "And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1" & direction & _
+        " Order By dbo.cause.id Desc")
+        Do While Not rs.EOF
+            index = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        query = "Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.cause Where dbo.cause.type=2 " & _
+        "And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1 And dbo.cause.id>=" & _
+        CStr(index) & " Order By dbo.cause.id"
+    End If
+    
+    lstCause.Clear
+    causeId.RemoveAll
+    index = 0
+    Set rs = cmmsConnection.Execute(query)
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstIndex = rs.Fields(0).value
+        Else
+            lastIndex = rs.Fields(0).value
+        End If
+        lstCause.AddItem (rs.Fields(5).value)
+        causeId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+End Function
+
+Function getSubCausesPerPage(direction As String)
+    Dim index As Integer
+    Dim query As String
+    
+    If sbUp = True Then
+        query = "Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.subcause Where dbo.subcause.cause=" & _
+        lstCauseId & " And dbo.subcause.enable=1" & direction & " Order By dbo.subcause.id"
+    Else
+        Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.subcause Where dbo.subcause.cause=" & _
+        lstCauseId & " And dbo.subcause.enable=1" & direction & " Order By dbo.subcause.id Desc")
+        Do While Not rs.EOF
+            index = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        query = "Select Top " & CStr(ThisProject.getCountSingleItem()) & " * From dbo.subcause Where dbo.subcause.cause=" & _
+        lstCauseId & " And dbo.subcause.enable=1 And dbo.subcause.id>=" & CStr(index) & " Order By dbo.subcause.id"
+    End If
+    
+    lstCause.Clear
+    causeId.RemoveAll
+    index = 0
+    Set rs = cmmsConnection.Execute(query)
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstIndex = rs.Fields(0).value
+        Else
+            lastIndex = rs.Fields(0).value
+        End If
+        lstCause.AddItem (rs.Fields(4).value)
+        causeId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+End Function
+
+

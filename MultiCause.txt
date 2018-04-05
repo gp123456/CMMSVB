@@ -1,0 +1,798 @@
+﻿Dim cmmsConnection As ADODB.Connection
+Dim dictDelayId As Scripting.Dictionary
+Dim dictMechanicalId As Scripting.Dictionary
+Dim dictElectricalId As Scripting.Dictionary
+Dim queries As Collection
+Dim queriesSubCauses As Collection
+Dim causeDuration As Long
+Dim duration As Long
+Dim prevDuration As Long
+Dim firstDelayIndex As Integer
+Dim lastDelayIndex As Integer
+Dim firstMechanicalIndex As Integer
+Dim lastMechanicalIndex As Integer
+Dim firstElectricalIndex As Integer
+Dim lastElectricalIndex As Integer
+Dim sbDelayPrevValue As Integer
+Dim sbDelayUp As Boolean
+Dim sbMechanicalPrevValue As Integer
+Dim sbMechanicalUp As Boolean
+Dim sbElectricalPrevValue As Integer
+Dim sbElectricalUp As Boolean
+Dim lstElectricalCauseId As Long
+Dim lstMechanicalCauseId As Long
+'Dim lblFirstMechanicalLevel As String
+'Dim lblFirstElectricalLevel As String
+
+Private Sub bKeyClear_Click()
+    txtDuration.Text = 0
+End Sub
+
+Private Sub bKeyNum0_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(0)
+    End If
+End Sub
+
+Private Sub bKeyNum1_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(1)
+    End If
+End Sub
+
+Private Sub bKeyNum2_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(2)
+    End If
+End Sub
+
+Private Sub bKeyNum3_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(3)
+    End If
+End Sub
+
+Private Sub bKeyNum4_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(4)
+    End If
+End Sub
+
+Private Sub bKeyNum5_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(5)
+    End If
+End Sub
+
+Private Sub bKeyNum6_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(6)
+    End If
+End Sub
+
+Private Sub bKeyNum7_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(7)
+    End If
+End Sub
+
+Private Sub bKeyNum8_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(8)
+    End If
+End Sub
+
+Private Sub bKeyNum9_Click()
+    If CInt(txtDuration.Text) < 9999 Then
+        If CInt(txtDuration.Text) = 0 Then
+            txtDuration.Text = ""
+        End If
+        txtDuration.Text = txtDuration.Text & CStr(9)
+    End If
+End Sub
+
+Private Sub btCancel_Click()
+    DoCmd.Close
+    cmmsConnection.Close
+End Sub
+
+Private Sub btElectrical_Click()
+    If lstElectrical.ListCount > 0 And lstElectrical.Text = "" Then
+        lblSubmit = "ÐñÝðåé íá åðéëÝîåéò ìéá âëÜâç áðü ôçí ëßóôá"
+    Else
+        Dim index As Integer
+        Dim count As Long
+        btSubmit.Enabled = True
+        btElectrical.Enabled = False
+        
+        lstElectricalCauseId = dictElectricalId.item(lstElectrical.ListIndex)
+        'lblFirstElectricalLevel = CStr(lstElectrical.Text)
+        'lblSubmit = lstElectrical.Text
+        lstElectrical.Clear
+        dictElectricalId.RemoveAll
+        Set rs = cmmsConnection.Execute _
+            ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.subcause Where dbo.subcause.cause=" & _
+            lstElectricalCauseId & " And dbo.subcause.enable=1 Order By dbo.subcause.id")
+        Do While Not rs.EOF
+            If index = 0 Then
+                firstElectricalIndex = rs.Fields(0).value
+            Else
+                lastElectricalIndex = rs.Fields(0).value
+            End If
+            lstElectrical.AddItem (rs.Fields(4).value)
+            dictElectricalId.Add index, rs.Fields(0).value
+            index = index + 1
+            rs.MoveNext
+        Loop
+        rs.Close
+        Set rs = cmmsConnection.Execute _
+            ("Select count(*) From dbo.subcause Where dbo.subcause.cause=" & lstElectricalCauseId & _
+            " And dbo.subcause.enable=1")
+        Do While Not rs.EOF
+             count = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        If count Mod ThisProject.getCountMultipleItem() = 0 Then
+            sbElectrical.Max = Int(count / ThisProject.getCountMultipleItem())
+        Else
+            sbElectrical.Max = Int(count / ThisProject.getCountMultipleItem()) + 1
+        End If
+        sbElectricalPrevValue = 1
+        btSubmit.Enabled = True
+        btElectrical.Enabled = False
+    End If
+End Sub
+
+Private Sub btMechanical_Click()
+    If lstMechanical.ListCount > 0 And lstMechanical.Text = "" Then
+        lblSubmit = "ÐñÝðåé íá åðéëÝîåéò ìéá âëÜâç áðü ôçí ëßóôá"
+    Else
+        Dim index As Integer
+        Dim count As Long
+        btSubmit.Enabled = True
+        btMechanical.Enabled = False
+        
+        lstMechanicalCauseId = dictMechanicalId.item(lstMechanical.ListIndex)
+        'lblFirstMechanicalLevel = CStr(lstMechanical.Text)
+        'lblSubmit = lstMechanical.Text
+        lstMechanical.Clear
+        dictMechanicalId.RemoveAll
+        Set rs = cmmsConnection.Execute _
+            ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.subcause Where dbo.subcause.cause=" & _
+            lstMechanicalCauseId & " And dbo.subcause.enable=1 Order By dbo.subcause.id")
+        Do While Not rs.EOF
+            If index = 0 Then
+                firstMechanicalIndex = rs.Fields(0).value
+            Else
+                lastMechanicalIndex = rs.Fields(0).value
+            End If
+            lstMechanical.AddItem (rs.Fields(4).value)
+            dictMechanicalId.Add index, rs.Fields(0).value
+            index = index + 1
+            rs.MoveNext
+        Loop
+        rs.Close
+        Set rs = cmmsConnection.Execute _
+            ("Select count(*) From dbo.subcause Where dbo.subcause.cause=" & lstMechanicalCauseId & _
+            " And dbo.subcause.enable=1")
+        Do While Not rs.EOF
+             count = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        If count Mod ThisProject.getCountMultipleItem() = 0 Then
+            sbMechanical.Max = Int(count / ThisProject.getCountMultipleItem())
+        Else
+            sbMechanical.Max = Int(count / ThisProject.getCountMultipleItem()) + 1
+        End If
+        sbMechanicalPrevValue = 1
+    End If
+End Sub
+
+Private Sub btnExit_Click()
+    Dim minDuration As Integer
+    
+    minDuration = Int(duration / 60)
+    If minDuration = causeDuration Then
+        Dim returnMain As Tag
+                
+        Set returnMain = gTagDb.GetTag("CMMS\ReturnMain")
+        For Each query In queries
+            cmmsConnection.Execute (query)
+        Next query
+        
+          
+        ' **************************** LOG
+       cmmsConnection.Execute _
+        ("Insert INTO dbo.log (machine,created,routine,logtext) VALUES (" & 0 & _
+        ",'" & CStr(Now) & "','btSubmit_Click - Multiple Cause','finished') ")
+        
+        
+        cmmsConnection.Close
+        Set dictDelayId = Nothing
+        Set dictMechanicalId = Nothing
+        Set dictElectricalId = Nothing
+        ThisProject.removeMapDeclarations
+        
+        If ThisProject.hasMapDeclarations() = False Then
+            returnMain.value = 1
+        Else
+            ThisProject.setCurrentLine
+            Call ThisProject.InitializeCause
+        End If
+        DoCmd.Close
+    Else
+        If minDuration > causeDuration Then
+            lblSubmit = "Åðáíåëáâå ôçí äéáäéêáóßá ãéáôß ï óõíïëéêü ÷ñüíï åßíáé ìéêñüôåñï " & _
+                "ôïõ óôáìáôÞìáôïò ôçò ìç÷áíÞò"
+        Else
+            lblSubmit = "Åðáíåëáâå ôçí äéáäéêáóßá (Áêýñùóç ôçò ðñïçãïýìåíçò) ãéáôß ï óõíïëéêüò ÷ñüíïò åßíáé ìåãáëýôåñïò " & _
+                "ôïõ óôáìáôÞìáôïò ôçò ìç÷áíÞò"
+            mpCauses.Enabled = False
+            txtDuration.Enabled = False
+            btSubmit.Enabled = False
+            btnExit.Enabled = False
+            bKeyNum0.Enabled = False
+            bKeyNum1.Enabled = False
+            bKeyNum2.Enabled = False
+            bKeyNum3.Enabled = False
+            bKeyNum4.Enabled = False
+            bKeyNum5.Enabled = False
+            bKeyNum6.Enabled = False
+            bKeyNum7.Enabled = False
+            bKeyNum8.Enabled = False
+            bKeyNum9.Enabled = False
+            bKeyClear.Enabled = False
+        End If
+        Do Until queries.count = 0
+            queries.Remove 1
+        Loop
+        causeDuration = 0
+    End If
+End Sub
+
+Private Sub btSubmit_Click()
+    Dim durationSubmit As Integer
+    Dim index As Long
+    Dim minDuration As Integer
+    
+    minDuration = Int(duration / 60)
+    
+    If txtDuration.Text = "" Or IsNumeric(txtDuration.Text) = False Then
+        durationSubmit = 0
+    Else
+        durationSubmit = txtDuration.Text
+    End If
+    If lstDelay.Text = "" And lstMechanical.Text = "" And lstElectrical.Text = "" Then
+        lblSubmit = "ÐñÝðåé íá åðéëÝîåéò ìéá âëÜâç áðü ôçí ëßóôá"
+    ElseIf durationSubmit <= 0 Then
+        lblSubmit = "ÐñÝðåé íá âÜëåéò ìßá ðñáãìáôéêÞ äéÜñêåéá óå ëåðôÜ ãéá ôçí óõãêåêñéìÝíç âëÜâç"
+        txtDuration = 0
+    Else:
+        Dim machineId As Long
+        Dim department As Long
+        Dim causeType As Long
+        Dim causeId As Long
+        Dim SubcauseId As Long
+        Dim startCause As Date
+                        
+        If mpCauses.value <> 0 And btMechanical.Enabled = True And btElectrical.Enabled = True Then
+            lblSubmit = "ÐñÝðåé íá åðéëÝîåôå äåýôåñï åðßðåäï ãéá ðñïóèÞêç âëÜâçò"
+        Else
+            machineId = ThisProject.getCurrentMachineId()
+            If mpCauses.value = 0 Then
+                causeType = 3
+            Else
+                causeType = mpCauses.value
+            End If
+            If causeType = 1 Then
+                lstDeclare.AddItem (lstMechanical.value & "," & txtDuration.value)
+                lblSubmit = "Ç ÂëÜâç:'" & lstMechanical.value & "' ìå äéÜñêåéá:" & txtDuration.value & _
+                " ëåðôÜ åéóÞ÷èçêå åðéôõ÷þò"
+                causeId = dictMechanicalId.item(lstMechanical.ListIndex)
+            ElseIf causeType = 2 Then
+                lstDeclare.AddItem (lstElectrical.value & "," & txtDuration.value)
+                lblSubmit = "Ç ÂëÜâç:'" & lstElectrical.value & "' ìå äéÜñêåéá:" & txtDuration.value & _
+                " ëåðôÜ åéóÞ÷èçêå åðéôõ÷þò"
+                causeId = dictElectricalId.item(lstElectrical.ListIndex)
+            ElseIf (causeType = 3) Then
+                lstDeclare.AddItem (lstDelay.value & "," & txtDuration.value)
+                lblSubmit = "Ç ÂëÜâç:'" & lstDelay.value & "' ìå äéÜñêåéá:" & txtDuration.value & _
+                    " ëåðôÜ åéóÞ÷èçêå åðéôõ÷þò"
+                causeId = dictDelayId.item(lstDelay.ListIndex)
+            End If
+            causeDuration = causeDuration + txtDuration.value
+            If queries.count = 0 Then
+                startCause = ThisProject.getCurrentCreated()
+                prevDuration = txtDuration.value
+            Else
+                startCause = DateAdd("n", CDbl(prevDuration), ThisProject.getCurrentCreated())
+                prevDuration = prevDuration + txtDuration.value
+            End If
+            queries.Add _
+                ("Insert INTO dbo.F57790 VALUES ('" & CStr(startCause) & ".00','0'," & CStr(ThisProject.getLOCNKEY()) & _
+                ",'" & ThisProject.getLOCN() & "','" & ThisProject.getSTEP() & "','" & ThisProject.getMCU() & "'," & _
+                CStr(causeType) & "," & CStr(causeId) & "," & CStr(machineId) & ",'" & ThisProject.getFAAL1() & _
+                "','" & ThisProject.getLINE() & "','0','" & CStr(causeId) & "'," & CStr((Int(txtDuration.value)) * 60) & _
+                "," & CStr(ThisProject.getUKIDP()) & ",0,'" & CStr(Now) & ".00','DLAD','" & CStr(machineId) + CStr(ThisProject.getCurrentCreated()) & "','',0)")
+            lblStopped = lblStopped - txtDuration.value
+            txtDuration.value = 0
+            If btMechanical.Enabled = False Then
+                Dim countMechanical As Long
+                        
+                btMechanical.Enabled = True
+                Set rs = cmmsConnection.Execute _
+                    ("Select count(*) From dbo.cause Where dbo.cause.type=1 And dbo.cause.department=" & _
+                    CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1")
+                Do While Not rs.EOF
+                    countMechanical = rs.Fields(0).value
+                rs.MoveNext
+                Loop
+                rs.Close
+                If countMechanical Mod ThisProject.getCountMultipleItem() = 0 Then
+                    sbMechanical.Max = Int(countMechanical / ThisProject.getCountMultipleItem())
+                Else
+                    sbMechanical.Max = Int(countMechanical / ThisProject.getCountMultipleItem()) + 1
+                End If
+                sbMechanicalPrevValue = 1
+                index = 0
+                Set rs = cmmsConnection.Execute _
+                    ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=1 And " & _
+                    "dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1 Order By dbo.cause.id")
+                
+                lstMechanical.Clear
+                dictMechanicalId.RemoveAll
+                Do While Not rs.EOF
+                    If index = 0 Then
+                        firstMechanicalIndex = rs.Fields(0).value
+                    Else
+                        lastMechanicalIndex = rs.Fields(0).value
+                    End If
+                    lstMechanical.AddItem (rs.Fields(5).value)
+                    dictMechanicalId.Add index, rs.Fields(0).value
+                    index = index + 1
+                    rs.MoveNext
+                Loop
+                rs.Close
+            End If
+            If btElectrical.Enabled = False Then
+                Dim countElectrical As Long
+            
+                btElectrical.Enabled = True
+                Set rs = cmmsConnection.Execute _
+                    ("Select count(*) From dbo.cause Where dbo.cause.type=2 And dbo.cause.department=" & _
+                    CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1")
+                Do While Not rs.EOF
+                    countElectrical = rs.Fields(0).value
+                rs.MoveNext
+                Loop
+                rs.Close
+                If countElectrical Mod ThisProject.getCountMultipleItem() Then
+                    sbElectrical.Max = Int(countElectrical / ThisProject.getCountMultipleItem())
+                Else
+                    sbElectrical.Max = Int(countElectrical / ThisProject.getCountMultipleItem()) + 1
+                End If
+                sbElectricalPrevValue = 1
+                index = 0
+                Set rs = cmmsConnection.Execute _
+                    ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=2 And " & _
+                    "dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1 Order By dbo.cause.id")
+                
+                lstElectrical.Clear
+                dictElectricalId.RemoveAll
+                Do While Not rs.EOF
+                    If index = 0 Then
+                        firstElectricalIndex = rs.Fields(0).value
+                    Else
+                        lastElectricalIndex = rs.Fields(0).value
+                    End If
+                    lstElectrical.AddItem (rs.Fields(5).value)
+                    dictElectricalId.Add index, rs.Fields(0).value
+                    index = index + 1
+                    rs.MoveNext
+                Loop
+                rs.Close
+            End If
+        End If
+        If minDuration = causeDuration Then
+        btnExit.Enabled = True
+        End If
+    End If
+End Sub
+
+Private Sub sbDelay_Change()
+    If sbDelayPrevValue < sbDelay.value Then
+        sbDelayUp = True
+        getDelayPerPage (" And dbo.vDelays.DRKEY>" & CStr(lastDelayIndex))
+    Else
+        sbDelayUp = False
+        getDelayPerPage (" And dbo.vDelays.DRKEY<" & CStr(firstDelayIndex))
+    End If
+    sbDelayPrevValue = sbDelay.value
+End Sub
+
+Private Sub sbElectrical_Change()
+    'lblSubmit = lblFirstElectricalLevel
+    If sbElectricalPrevValue < sbElectrical.value Then
+        sbElectricalUp = True
+        If (btElectrical.Enabled = True) Then
+            getElectricalPerPage (" And dbo.cause.id>" & CStr(lastElectricalIndex))
+        Else
+            getElectricalSubCausesPerPage (" And dbo.subcause.id>" & CStr(lastElectricalIndex))
+        End If
+    Else
+        sbElectricalUp = False
+        If (btElectrical.Enabled = True) Then
+            getElectricalPerPage (" And dbo.cause.id<" & CStr(firstElectricalIndex))
+        Else
+            getElectricalSubCausesPerPage (" And dbo.subcause.id<" & CStr(firstElectricalIndex))
+        End If
+    End If
+    sbElectricalPrevValue = sbElectrical.value
+End Sub
+
+Private Sub sbMechanical_Change()
+    'lblSubmit = lblFirstMechanicalLevel
+    If sbMechanicalPrevValue < sbMechanical.value Then
+        sbMechanicalUp = True
+        If (btMechanical.Enabled = True) Then
+            getMechanicalPerPage (" And dbo.cause.id>" & CStr(lastMechanicalIndex))
+        Else
+            getMechanicalSubCausesPerPage (" And dbo.subcause.id>" & CStr(lastMechanicalIndex))
+        End If
+    Else
+        sbMechanicalUp = False
+        If (btMechanical.Enabled = True) Then
+            getMechanicalPerPage (" And dbo.cause.id<" & CStr(firstMechanicalIndex))
+        Else
+            getMechanicalSubCausesPerPage (" And dbo.subcause.id<" & CStr(firstMechanicalIndex))
+        End If
+    End If
+    sbMechanicalPrevValue = sbMechanical.value
+End Sub
+
+Private Sub UserForm_Initialize()
+    Dim index As Long
+    Dim countDelay As Long
+    Dim countMechanical As Long
+    Dim countElectrical As Long
+    
+    mpCauses.value = 0
+    causeDuration = 0
+    Set queries = New Collection
+    Set queriesSubCauses = New Collection
+    duration = ThisProject.getCurrentDuration()
+    lblStopped = Int(duration / 60)
+    Set dictDelayId = CreateObject("Scripting.Dictionary")
+    Set dictMechanicalId = CreateObject("Scripting.Dictionary")
+    Set dictElectricalId = CreateObject("Scripting.Dictionary")
+    Set cmmsConnection = New ADODB.Connection
+    cmmsConnection.ConnectionString = ThisProject.getDBConnectionString()
+    cmmsConnection.Open
+    Set rs = cmmsConnection.Execute _
+        ("Select count(*) From dbo.vDelays Where dbo.vDelays.DRLOCNKEY=" & CStr(ThisProject.getLOCNKEY()))
+    Do While Not rs.EOF
+        countDelay = rs.Fields(0).value
+        rs.MoveNext
+    Loop
+    rs.Close
+    Set rs = cmmsConnection.Execute _
+        ("Select count(*) From dbo.cause Where dbo.cause.type=1 And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & _
+        " And dbo.cause.enable=1")
+    Do While Not rs.EOF
+        countMechanical = rs.Fields(0).value
+        rs.MoveNext
+    Loop
+    rs.Close
+    Set rs = cmmsConnection.Execute _
+        ("Select count(*) From dbo.cause Where dbo.cause.type=2 And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & _
+        " And dbo.cause.enable=1")
+    Do While Not rs.EOF
+        countElectrical = rs.Fields(0).value
+        rs.MoveNext
+    Loop
+    rs.Close
+    If countDelay Mod ThisProject.getCountMultipleItem() = 0 Then
+        sbDelay.Max = Int(countDelay / ThisProject.getCountMultipleItem())
+    Else
+        sbDelay.Max = Int(countDelay / ThisProject.getCountMultipleItem()) + 1
+    End If
+    If countMechanical Mod ThisProject.getCountMultipleItem() = 0 Then
+        sbMechanical.Max = Int(countMechanical / ThisProject.getCountMultipleItem())
+    Else
+            sbMechanical.Max = Int(countMechanical / ThisProject.getCountMultipleItem()) + 1
+    End If
+    If countElectrical Mod ThisProject.getCountMultipleItem() = 0 Then
+        sbElectrical.Max = Int(countElectrical / ThisProject.getCountMultipleItem())
+    Else
+        sbElectrical.Max = Int(countElectrical / ThisProject.getCountMultipleItem()) + 1
+    End If
+    sbDelayPrevValue = 1
+    sbMechanicalPrevValue = 1
+    sbElectricalPrevValue = 1
+    Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.vDelays Where dbo.vDelays.DRLOCNKEY=" & _
+        CStr(ThisProject.getLOCNKEY()) & " Order By dbo.vDelays.DRKEY")
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstDelayIndex = rs.Fields(0).value
+        Else
+            lastDelayIndex = rs.Fields(0).value
+        End If
+        lstDelay.AddItem (rs.Fields(2).value)
+        dictDelayId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+    index = 0
+    Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=1 And " & _
+        "dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1 Order By dbo.cause.id")
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstMechanicalIndex = rs.Fields(0).value
+        Else
+            lastMechanicalIndex = rs.Fields(0).value
+        End If
+        lstMechanical.AddItem (rs.Fields(5).value)
+        dictMechanicalId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+    index = 0
+    Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=2 And " & _
+        "dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1 Order By dbo.cause.id")
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstElectricalIndex = rs.Fields(0).value
+        Else
+            lastElectricalIndex = rs.Fields(0).value
+        End If
+        lstElectrical.AddItem (rs.Fields(5).value)
+        dictElectricalId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+    lblStopMachine.Caption = lblStopMachine.Caption & Format(ThisProject.getCurrentCreated(), "dd/mm/yyyy hh:nn")
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode = 0 Then Cancel = True
+End Sub
+
+Function getDelayPerPage(direction As String)
+    Dim index As Integer
+    Dim query As String
+    
+    If sbDelayUp = True Then
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.vDelays Where " & _
+        "dbo.vDelays.DRLOCNKEY=" & CStr(ThisProject.getLOCNKEY()) & direction & " Order By dbo.vDelays.DRKEY"
+    Else
+        Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.vDelays Where dbo.vDelays.DRLOCNKEY=" & _
+        CStr(ThisProject.getLOCNKEY()) & direction & " Order By dbo.vDelays.DRKEY Desc")
+        Do While Not rs.EOF
+            index = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.vDelays Where " & _
+        "dbo.vDelays.DRLOCNKEY=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.vDelays.DRKEY>=" & CStr(index) & _
+        " Order By dbo.vDelays.DRKEY"
+    End If
+    
+    lstDelay.Clear
+    dictDelayId.RemoveAll
+    index = 0
+    Set rs = cmmsConnection.Execute(query)
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstDelayIndex = rs.Fields(0).value
+        Else
+            lastDelayIndex = rs.Fields(0).value
+        End If
+        lstDelay.AddItem (rs.Fields(2).value)
+        dictDelayId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+End Function
+
+Function getMechanicalPerPage(direction As String)
+    Dim index As Integer
+    Dim query As String
+    
+    If sbMechanicalUp = True Then
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=1 " & _
+        "And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1" & direction & _
+        " Order By dbo.cause.id"
+    Else
+        Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=1 " & _
+        "And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1" & direction & _
+        " Order By dbo.cause.id Desc")
+        Do While Not rs.EOF
+            index = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=1 " & _
+        "And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1 And dbo.cause.id>=" & _
+        CStr(index) & " Order By dbo.cause.id"
+    End If
+    
+    lstMechanical.Clear
+    dictMechanicalId.RemoveAll
+    index = 0
+    Set rs = cmmsConnection.Execute(query)
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstMechanicalIndex = rs.Fields(0).value
+        Else
+            lastMechanicalIndex = rs.Fields(0).value
+        End If
+        lstMechanical.AddItem (rs.Fields(5).value)
+        dictMechanicalId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+End Function
+
+Function getElectricalPerPage(direction As String)
+    Dim index As Integer
+    Dim query As String
+    
+    If sbElectricalUp = True Then
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=2 " & _
+        "And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1" & direction & _
+        " Order By dbo.cause.id"
+    Else
+        Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=2 " & _
+        "And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1" & direction & _
+        " Order By dbo.cause.id Desc")
+        Do While Not rs.EOF
+            index = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.cause Where dbo.cause.type=2 " & _
+        "And dbo.cause.department=" & CStr(ThisProject.getLOCNKEY()) & " And dbo.cause.enable=1 And dbo.cause.id>=" & _
+        CStr(index) & " Order By dbo.cause.id"
+    End If
+    
+    lstElectrical.Clear
+    dictElectricalId.RemoveAll
+    index = 0
+    Set rs = cmmsConnection.Execute(query)
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstElectricalIndex = rs.Fields(0).value
+        Else
+            lastElectricalIndex = rs.Fields(0).value
+        End If
+        lstElectrical.AddItem (rs.Fields(5).value)
+        dictElectricalId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+End Function
+
+Function getMechanicalSubCausesPerPage(direction As String)
+    Dim index As Integer
+    Dim query As String
+    
+    If sbMechanicalUp = True Then
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.subcause Where " & _
+        "dbo.subcause.cause=" & lstMechanicalCauseId & " And dbo.subcause.enable=1" & direction & _
+        " Order By dbo.subcause.id"
+    Else
+        Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.subcause Where dbo.subcause.cause=" & _
+        lstMechanicalCauseId & " And dbo.subcause.enable=1" & direction & " Order By dbo.subcause.id Desc")
+        Do While Not rs.EOF
+            index = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.subcause Where " & _
+        "dbo.subcause.cause=" & lstMechanicalCauseId & " And dbo.subcause.enable=1 And dbo.subcause.id>=" & _
+        CStr(index) & " Order By dbo.subcause.id"
+    End If
+    
+    lstMechanical.Clear
+    dictMechanicalId.RemoveAll
+    index = 0
+    Set rs = cmmsConnection.Execute(query)
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstMechanicalIndex = rs.Fields(0).value
+        Else
+            lastMechanicalIndex = rs.Fields(0).value
+        End If
+        lstMechanical.AddItem (rs.Fields(4).value)
+        dictMechanicalId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+End Function
+
+Function getElectricalSubCausesPerPage(direction As String)
+    Dim index As Integer
+    Dim query As String
+    
+    If sbElectricalUp = True Then
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.subcause Where " & _
+        " dbo.subcause.cause=" & lstElectricalCauseId & " And dbo.subcause.enable=1" & direction & _
+        " Order By dbo.subcause.id"
+    Else
+        Set rs = cmmsConnection.Execute _
+        ("Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.subcause Where dbo.subcause.cause=" & _
+        lstElectricalCauseId & " And dbo.subcause.enable=1" & direction & " Order By dbo.subcause.id Desc")
+        Do While Not rs.EOF
+            index = rs.Fields(0).value
+            rs.MoveNext
+        Loop
+        rs.Close
+        query = "Select Top " & CStr(ThisProject.getCountMultipleItem()) & " * From dbo.subcause Where " & _
+        "dbo.subcause.cause=" & lstElectricalCauseId & " And dbo.subcause.enable=1 And dbo.subcause.id>=" & _
+        CStr(index) & " Order By dbo.subcause.id"
+    End If
+    
+    lstElectrical.Clear
+    dictElectricalId.RemoveAll
+    index = 0
+    Set rs = cmmsConnection.Execute(query)
+    Do While Not rs.EOF
+        If index = 0 Then
+            firstElectricalIndex = rs.Fields(0).value
+        Else
+            lastElectricalIndex = rs.Fields(0).value
+        End If
+        lstElectrical.AddItem (rs.Fields(4).value)
+        dictElectricalId.Add index, rs.Fields(0).value
+        index = index + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+End Function
+
+Function insertDelay(query As String)
+
+End Function
